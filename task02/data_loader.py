@@ -2,6 +2,10 @@ import numpy as np
 from sklearn.model_selection import StratifiedKFold
 
 def load():
+    X_train, y_train, stratify_criterion, X_test, y_test, _, __ = _load()
+    return X_train, y_train, stratify_criterion, X_test, y_test
+
+def _load():
     X = np.concatenate((np.load('../dataset/X0.npy'), 
         np.load('../dataset/X1.npy'), 
         np.load('../dataset/X2.npy'), 
@@ -18,5 +22,5 @@ def load():
     skf = StratifiedKFold(int(1/0.2)) #20% test set
     train_index, test_index = next(skf.split(X, stratify_criterion))
 
-    return X[train_index], y[train_index], stratify_criterion[train_index], X[test_index], y[test_index]
+    return X[train_index], y[train_index], stratify_criterion[train_index], X[test_index], y[test_index], a[train_index], a[test_index]
     
