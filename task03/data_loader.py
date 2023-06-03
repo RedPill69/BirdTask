@@ -1,6 +1,5 @@
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
-
+import os
 
 def load_challenge():
     result = np.empty((16, 3000, 548))
@@ -19,27 +18,62 @@ def save_challenge(unique_key, results):
     with open(f'{unique_key}.csv', 'w') as f:
         f.write(result_str)
 
+def load_dataset():
+    classes = ['comcuc', 'cowpig1', 'eucdov', 'eueowl1', 'grswoo', 'tawowl1']
+    dataset = {}
 
-def load():
-    X_train, y_train, stratify_criterion, X_test, y_test, _, __ = _load()
-    return X_train, y_train, stratify_criterion, X_test, y_test
+    #load files into arrays
+    for clazz in classes:
+        dataset[clazz] = {'features': [], 'labels': []}
+        folder = f'../dataset/original/{clazz}'
+        for _, __, files in os.walk(folder):
+            for file in files:
+                if 'labels' in file:
+                    continue
+                data = np.load(f'{folder}/{file}')
+                labels = np.load(f'{folder}/{file.split(".")[0]}.labels.npy')
+                dataset[clazz]['features'].append(data)
+                dataset[clazz]['labels'].append(labels[:, 0])
+            
+    #combine arrays into 1 long array for each bird
+    for clazz in classes:
+        dataset[clazz]['features'] = np.concatenate(dataset[clazz]['features'], axis=0)
+        dataset[clazz]['labels'] = np.concatenate(dataset[clazz]['labels'], axis=0)
 
-def _load():
-    X = np.concatenate((np.load('../dataset/X0.npy'), 
-        np.load('../dataset/X1.npy'), 
-        np.load('../dataset/X2.npy'), 
-        np.load('../dataset/X3.npy'))) #feature matrix
-    y = np.load('../dataset/y.npy') #labels
-    a = np.load('../dataset/a.npy') #agreement as a probability
-
-    #group agreement into bins
-    a_digit = np.digitize(a, [0.5, 0.6, 0.7, 0.8, 0.9])
-    #generate unique class-agreement pair
-    stratify_criterion = np.array([label * 10 + agreement for label, agreement in zip(y, a_digit)])
-    stratify_criterion = np.unique(stratify_criterion, return_inverse = True)[1]   
+    #extract calls from arrays
+    for clazz in classes:
+        f, l = get_calls(dataset[clazz]['features'], dataset[clazz]['labels'])
+        dataset[clazz]['features'] = f
+        dataset[clazz]['labels'] = l
     
-    skf = StratifiedKFold(int(1/0.2)) #20% test set
-    train_index, test_index = next(skf.split(X, stratify_criterion))
+    #split into train and test set
+    for clazz in classes:
+        f = dataset[clazz]['features']
+        l = dataset[clazz]['labels']
 
-    return X[train_index], y[train_index], stratify_criterion[train_index], X[test_index], y[test_index], a[train_index], a[test_index]
+        dataset[clazz]['train_features'] = []
+        dataset[clazz]['train_labels'] = []
+
+        dataset[clazz]['test_features'] = []
+        dataset[clazz]['test_labels'] = []
+
+        indices = np.arange(len(l))
+        train_index = np.random.choice(indices, size=int(len(l) * 0.8), replace=False)
+        for i in indices:
+            if i in train_index:
+                dataset[clazz]['train_features'].append(dataset[clazz]['features'][i])
+                dataset[clazz]['train_labels'].append(dataset[clazz]['labels'][i])
+            else:
+                dataset[clazz]['test_features'].append(dataset[clazz]['features'][i])
+                dataset[clazz]['test_labels'].append(dataset[clazz]['labels'][i])
     
+    return dataset
+
+def get_calls(features, original_labels):
+    labels = original_labels.copy()
+    labels[labels != 0] = 1
+    breaks = np.where(np.diff(labels) != 0)[0]
+    centers = np.ceil(np.convolve(breaks+1, np.array([0.5, 0.5]), mode='valid'))[1 if labels[0] == 0 else 0::2].astype(int)
+    label_segments = [original_labels[centers[i]:centers[i+1]] for i in range(len(centers)-1)]
+    feature_segments = [features[centers[i]:centers[i+1]] for i in range(len(centers)-1)]
+    return feature_segments, label_segments
