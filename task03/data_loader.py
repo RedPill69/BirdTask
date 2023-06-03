@@ -58,6 +58,7 @@ def load_dataset():
         dataset[clazz]['test_labels'] = []
 
         indices = np.arange(len(l))
+        np.random.seed(123)
         train_index = np.random.choice(indices, size=int(len(l) * 0.8), replace=False)
         for i in indices:
             if i in train_index:
