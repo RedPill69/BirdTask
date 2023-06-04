@@ -15,7 +15,7 @@ def save_challenge(unique_key, results):
             result_str += f'{item},'
         result_str = result_str[:len(result_str)-1] + '\n'
 
-    with open(f'{unique_key}.csv', 'w') as f:
+    with open(f'outputs/{unique_key}.csv', 'w') as f:
         f.write(result_str)
 
 def load_dataset():
