@@ -24,68 +24,44 @@ def load_dataset():
 
     #load files into arrays
     for i, clazz in enumerate(classes):
-        dataset[clazz] = {'features': [], 'labels': [], 'agreement': []}
+        dataset[clazz] = {'test_features': [], 'test_labels': [], 'train_features': [], 'train_labels': []}
         folder = f'../dataset/original/{clazz}'
+        np.random.seed(123)
+        indices = np.random.choice(np.arange(200), 40)
         for _, __, files in os.walk(folder):
+            i = 0
             for file in files:
                 if 'labels' in file:
                     continue
                 data = np.load(f'{folder}/{file}')
                 labels = np.load(f'{folder}/{file.split(".")[0]}.labels.npy')
-                dataset[clazz]['features'].append(data)
-                dataset[clazz]['labels'].append(labels[:, 0])
-                agreements = np.empty((len(labels), 2))
-                agreements[labels[:, 0] != 0, 0] = np.count_nonzero(labels[labels[:, 0] != 0][:, 1:], axis=1) / labels.shape[1]
-                agreements[labels[:, 0] == 0, 0] = (labels.shape[1] - np.count_nonzero(labels[labels[:, 0] == 0][:, 1:], axis=1)) / labels.shape[1]
-                agreements[:, 1] = i+1
-                dataset[clazz]['agreement'].append(agreements)
-            
+                if i in indices:
+                    dataset[clazz]['test_features'].append(data)
+                    dataset[clazz]['test_labels'].append(labels[:, 0])
+                else:
+                    dataset[clazz]['train_features'].append(data)
+                    dataset[clazz]['train_labels'].append(labels[:, 0])
+                i += 1
+                
     #combine arrays into 1 long array for each bird
     for clazz in classes:
-        dataset[clazz]['features'] = np.concatenate(dataset[clazz]['features'], axis=0)
-        dataset[clazz]['labels'] = np.concatenate(dataset[clazz]['labels'], axis=0)
-        dataset[clazz]['agreement'] = np.concatenate(dataset[clazz]['agreement'], axis=0)
+        for group in ['train_features', 'train_labels', 'test_features', 'test_labels' ]:
+            dataset[clazz][group] = np.concatenate(dataset[clazz][group], axis=0)
 
     #extract calls from arrays
     for clazz in classes:
-        f, l, a = get_calls(dataset[clazz]['features'], dataset[clazz]['labels'], dataset[clazz]['agreement'])
-        dataset[clazz]['features'] = f
-        dataset[clazz]['labels'] = l
-        dataset[clazz]['agreement'] = a
-    
-    #split into train and test set
-    for clazz in classes:
-
-        dataset[clazz]['train_features'] = []
-        dataset[clazz]['train_labels'] = []
-        dataset[clazz]['train_agreement'] = []
-
-        dataset[clazz]['test_features'] = []
-        dataset[clazz]['test_labels'] = []
-        dataset[clazz]['test_agreement'] = []
-
-        l = dataset[clazz]['labels']
-        indices = np.arange(len(l))
-        np.random.seed(123)
-        train_index = np.random.choice(indices, size=int(len(l) * 0.8), replace=False)
-        for i in indices:
-            if i in train_index:
-                dataset[clazz]['train_features'].append(dataset[clazz]['features'][i])
-                dataset[clazz]['train_labels'].append(dataset[clazz]['labels'][i])
-                dataset[clazz]['train_agreement'].append(dataset[clazz]['agreement'][i])
-            else:
-                dataset[clazz]['test_features'].append(dataset[clazz]['features'][i])
-                dataset[clazz]['test_labels'].append(dataset[clazz]['labels'][i])
-                dataset[clazz]['test_agreement'].append(dataset[clazz]['agreement'][i])
+        for group in ['train_', 'test_']:
+            f, l = get_calls(dataset[clazz][f'{group}features'], dataset[clazz][f'{group}labels'])
+            dataset[clazz][f'{group}features'] = f
+            dataset[clazz][f'{group}labels'] = l
     
     return dataset
 
-def get_calls(features, original_labels, agreements):
+def get_calls(features, original_labels):
     labels = original_labels.copy()
     labels[labels != 0] = 1
     breaks = np.where(np.diff(labels) != 0)[0]
     centers = np.ceil(np.convolve(breaks+1, np.array([0.5, 0.5]), mode='valid'))[1 if labels[0] == 0 else 0::2].astype(int)
     label_segments = [original_labels[centers[i]:centers[i+1]] for i in range(len(centers)-1)]
     feature_segments = [features[centers[i]:centers[i+1]] for i in range(len(centers)-1)]
-    agreement_segments = [agreements[centers[i]:centers[i+1]] for i in range(len(centers)-1)]
-    return feature_segments, label_segments, agreement_segments
+    return feature_segments, label_segments
